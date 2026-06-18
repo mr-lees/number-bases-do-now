@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CS Classroom "Do Now" Platform</title>
+  
+  <!-- Tailwind CSS (for modern UI styling) -->
+  <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+  
+  <!-- React & ReactDOM (Core libraries) -->
+  <script src="[https://unpkg.com/react@18/umd/react.production.min.js](https://unpkg.com/react@18/umd/react.production.min.js)" crossorigin></script>
+  <script src="[https://unpkg.com/react-dom@18/umd/react-dom.production.min.js](https://unpkg.com/react-dom@18/umd/react-dom.production.min.js)" crossorigin></script>
+  
+  <!-- Babel (to compile your JSX code directly in the browser) -->
+  <script src="[https://unpkg.com/@babel/standalone/babel.min.js](https://unpkg.com/@babel/standalone/babel.min.js)"></script>
+
+  <style>
+    /* Prevent raw unrendered code flashes on slow connections */
+    [v-cloak] { display: none; }
+    body { margin: 0; padding: 0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Note: We use type="text/babel" so the browser compiles our React syntax -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ==========================================
+    // CONSTANTS & HELPERS
+    // ==========================================
+    const HEX_MAP = {
+      0: '0', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7',
+      8: '8', 9: '9', 10: 'A', 11: 'B', 12: 'C', 13: 'D', 14: 'E', 15: 'F'
+    };
+
+    const REV_HEX_MAP = Object.fromEntries(
+      Object.entries(HEX_MAP).map(([k, v]) => [v, parseInt(k, 10)])
+    );
+
+    function formatBinary(binStr, limit) {
+      const padded = binStr.padStart(limit <= 15 ? 4 : 8, '0');
+      if (padded.length === 8) {
+        return `${padded.slice(0, 4)} ${padded.slice(4)}`;
+      }
+      return padded;
+    }
+
+    function generateExplanation(val, fromBase, toBase) {
+      const steps = [];
+      if (fromBase === 'binary' && toBase === 'decimal') {
+        const padded = val.replace(/\s/g, '');
+        const len = padded.length;
+        let sumStr = [];
+        let mathStr = [];
+        steps.push({
+          title: "Place Value Alignment",
+          desc: "Align the binary digits to the powers of 2 place-value table:"
+        });
+        const tableHeaders = [];
+        const tableValues = [];
+        for (let i = len - 1; i >= 0; i--) {
+          const pv = Math.pow(2, i);
+          const bit = padded[len - 1 - i];
+          tableHeaders.push(pv);
+          tableValues.push(bit);
+          if (bit === '1') {
+            sumStr.push(pv);
+            mathStr.push(`(1 × ${pv})`);
+          }
+        }
+        steps.push({ type: 'table', headers: tableHeaders, values: tableValues });
+        steps.push({
+          title: "Sum the Active Place Values",
+          desc: `Add together all the place values that have a '1' underneath: \n${sumStr.join(' + ')} = ${parseInt(padded, 2)}`
+        });
+      } else if (fromBase === 'decimal' && toBase === 'binary') {
+        let remainder = parseInt(val, 10);
+        const limit = remainder <= 15 ? 4 : 8;
+        steps.push({
+          title: "Powers of 2 Method",
+          desc: "Check which powers of 2 can fit inside our remaining value, starting from the largest:"
+        });
+        const pvs = limit === 4 ? [8, 4, 2, 1] : [128, 64, 32, 16, 8, 4, 2, 1];
+        const bits = [];
+        const trace = [];
+        pvs.forEach(pv => {
+          if (remainder >= pv) {
+            bits.push('1');
+            trace.push(`Fits ${pv} inside ${remainder}: Yes (1). New remainder = ${remainder - pv}`);
+            remainder -= pv;
+          } else {
+            bits.push('0');
+            trace.push(`Fits ${pv} inside ${remainder}: No (0).`);
+          }
+        });
+        steps.push({ type: 'list', items: trace });
+        steps.push({
+          title: "Assemble the Bits",
+          desc: `Concatenating our decisions yields: ${bits.join('')} (or formatted: ${formatBinary(bits.join(''), limit === 4 ? 15 : 255)})`
+        });
+      } else if (fromBase === 'binary' && toBase === 'hexadecimal') {
+        const rawBin = val.replace(/\s/g, '');
+        const len = rawBin.length;
+        if (len <= 4) {
+          const dec = parseInt(rawBin, 2);
+          steps.push({
+            title: "Single Nibble Conversion",
+            desc: `The binary '${rawBin}' equals ${dec} in decimal, which maps directly to Hex: ${HEX_MAP[dec]}`
+          });
+        } else {
+          const leftNibble = rawBin.slice(0, 4);
+          const rightNibble = rawBin.slice(4);
+          const decLeft = parseInt(leftNibble, 2);
+          const decRight = parseInt(rightNibble, 2);
+          const hexLeft = HEX_MAP[decLeft];
+          const hexRight = HEX_MAP[decRight];
+          steps.push({
+            title: "Split into 4-bit Nibbles",
+            desc: `Split the 8-bit binary into two 4-bit sections: [${leftNibble}] and [${rightNibble}]`
+          });
+          steps.push({
+            title: "Convert each Nibble to Hex",
+            desc: `Left Nibble: [${leftNibble}] = ${decLeft} in decimal = '${hexLeft}' in hex.\nRight Nibble: [${rightNibble}] = ${decRight} in decimal = '${hexRight}' in hex.`
+          });
+          steps.push({
+            title: "Combine Results",
+            desc: `Join the two hexadecimal values together: '${hexLeft}${hexRight}'`
+          });
+        }
+      } else if (fromBase === 'hexadecimal' && toBase === 'binary') {
+        steps.push({
+          title: "Convert Characters to 4-bit Nibbles",
+          desc: "Each hexadecimal character translates directly into a 4-bit binary nibble:"
+        });
+        const trace = [];
+        const bits = [];
+        for (let char of val) {
+          const dec = REV_HEX_MAP[char.toUpperCase()];
+          const bin = dec.toString(2).padStart(4, '0');
+          trace.push(`Hex '${char}' = ${dec} in decimal = '${bin}' in binary`);
+          bits.push(bin);
+        }
+        steps.push({ type: 'list', items: trace });
+        steps.push({
+          title: "Combine Nibbles",
+          desc: `Concatenating the binary segments results in: ${bits.join(' ')}`
+        });
+      } else if (fromBase === 'decimal' && toBase === 'hexadecimal') {
+        const decVal = parseInt(val, 10);
+        const quotient = Math.floor(decVal / 16);
+        const remainder = decVal % 16;
+        steps.push({
+          title: "Division by 16 Method",
+          desc: `Divide the decimal value by 16 to find the quotients and remainders:`
+        });
+        steps.push({
+          type: 'list',
+          items: [
+            `${decVal} ÷ 16 = ${quotient} with a remainder of ${remainder}`,
+            `First hex digit (sixteens place) = Quotient ${quotient} → '${HEX_MAP[quotient]}'`,
+            `Second hex digit (ones place) = Remainder ${remainder} → '${HEX_MAP[remainder]}'`
+          ]
+        });
+        steps.push({
+          title: "Assemble the Hex Value",
+          desc: `Combine the digits: '${HEX_MAP[quotient] || ''}${HEX_MAP[remainder]}'`
+        });
+      } else if (fromBase === 'hexadecimal' && toBase === 'decimal') {
+        steps.push({
+          title: "Place Value Multiplication",
+          desc: `Multiply each digit by its hex place value (16s and 1s places):`
+        });
+        if (val.length === 1) {
+          const dec = REV_HEX_MAP[val.toUpperCase()];
+          steps.push({
+            title: "Single Digit Hex",
+            desc: `'${val}' maps directly to decimal: ${dec}`
+          });
+        } else {
+          const d1 = val[0].toUpperCase();
+          const d2 = val[1].toUpperCase();
+          const v1 = REV_HEX_MAP[d1];
+          const v2 = REV_HEX_MAP[d2];
+          steps.push({
+            type: 'list',
+            items: [
+              `Left digit '${d1}' has a place value of 16: ${v1} × 16 = ${v1 * 16}`,
+              `Right digit '${d2}' has a place value of 1: ${v2} × 1 = ${v2}`
+            ]
+          });
+          steps.push({
+            title: "Sum the Values",
+            desc: `Add the two components together: ${v1 * 16} + ${v2} = ${(v1 * 16) + v2}`
+          });
+        }
+      }
+      return steps;
+    }
+
+    function createRandomQuestion(settings) {
+      const options = [];
+      if (settings.binDec) {
+        options.push({ from: 'binary', to: 'decimal' });
+        options.push({ from: 'decimal', to: 'binary' });
+      }
+      if (settings.binHex) {
+        options.push({ from: 'binary', to: 'hexadecimal' });
+        options.push({ from: 'hexadecimal', to: 'binary' });
+      }
+      if (settings.decHex) {
+        options.push({ from: 'decimal', to: 'hexadecimal' });
+        options.push({ from: 'hexadecimal', to: 'decimal' });
+      }
+      const activeConversion = options.length > 0 
+        ? options[Math.floor(Math.random() * options.length)] 
+        : { from: 'binary', to: 'decimal' };
+
+      const limit = settings.maxVal;
+      const decimalValue = Math.floor(Math.random() * (limit + 1));
+      let val = "";
+      let targetVal = "";
+
+      if (activeConversion.from === 'decimal') {
+        val = decimalValue.toString();
+      } else if (activeConversion.from === 'binary') {
+        val = formatBinary(decimalValue.toString(2), limit);
+      } else if (activeConversion.from === 'hexadecimal') {
+        val = decimalValue.toString(16).toUpperCase();
+      }
+
+      if (activeConversion.to === 'decimal') {
+        targetVal = decimalValue.toString();
+      } else if (activeConversion.to === 'binary') {
+        targetVal = formatBinary(decimalValue.toString(2), limit);
+      } else if (activeConversion.to === 'hexadecimal') {
+        targetVal = decimalValue.toString(16).toUpperCase();
+      }
+
+      const explanation = generateExplanation(val, activeConversion.from, activeConversion.to);
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        fromBase: activeConversion.from,
+        toBase: activeConversion.to,
+        val,
+        targetVal,
+        explanation,
+        decimalValue
+      };
+    }
+
+    // ==========================================
+    // APP MAIN COMPONENT
+    // ==========================================
+    function App() {
+      const [viewMode, setViewMode] = useState('single');
+      const [projectorMode, setProjectorMode] = useState(true);
+      const [showHelperTab, setShowHelperTab] = useState(false);
+      const [showScratchpad, setShowScratchpad] = useState(false);
+      const [settings, setSettings] = useState({ maxVal: 255, binDec: true, binHex: true, decHex: true });
+      const [soundEnabled, setSoundEnabled] = useState(true);
+      const [currentQuestion, setCurrentQuestion] = useState(null);
+      const [singleRevealed, setSingleRevealed] = useState(false);
+      const [gridQuestions, setGridQuestions] = useState([]);
+      const [gridRevealed, setGridRevealed] = useState([false, false, false, false]);
+      const [timerSeconds, setTimerSeconds] = useState(120);
+      const [timerActive, setTimerActive] = useState(false);
+      const [timerMax, setTimerMax] = useState(120);
+      const [interactiveBits, setInteractiveBits] = useState([0,0,0,0,0,0,0,0]);
+
+      useEffect(() => {
+        handleNextSingle();
+        handleNextGrid();
+      }, [settings]);
+
+      const playSound = (type) => {
+        if (!soundEnabled) return;
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContext) return;
+          const ctx = new AudioContext();
+          if (type === 'reveal') {
+            const osc1 = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc1.type = 'sine'; osc2.type = 'triangle';
+            osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
+            osc1.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.15);
+            osc2.frequency.setValueAtTime(659.25, ctx.currentTime);
+            osc2.frequency.exponentialRampToValueAtTime(1318.51, ctx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.destination);
+            osc1.start(); osc2.start();
+            osc1.stop(ctx.currentTime + 0.3); osc2.stop(ctx.currentTime + 0.3);
+          } else if (type === 'timer-end') {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(220, ctx.currentTime);
+            osc.frequency.setValueAtTime(330, ctx.currentTime + 0.2);
+            osc.frequency.setValueAtTime(220, ctx.currentTime + 0.4);
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(); osc.stop(ctx.currentTime + 0.6);
+          }
+        } catch (e) { console.warn(e); }
+      };
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (viewMode === 'single') {
+            if (e.code === 'Space') {
+              e.preventDefault();
+              handleToggleSingleReveal();
+            } else if (e.code === 'ArrowRight' || e.code === 'Enter') {
+              e.preventDefault();
+              handleNextSingle();
+            }
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [viewMode, singleRevealed, currentQuestion]);
+
+      useEffect(() => {
+        let interval = null;
+        if (timerActive && timerSeconds > 0) {
+          interval = setInterval(() => { setTimerSeconds(prev => prev - 1); }, 1000);
+        } else if (timerSeconds === 0 && timerActive) {
+          setTimerActive(false);
+          playSound('timer-end');
+        }
+        return () => clearInterval(interval);
+      }, [timerActive, timerSeconds]);
+
+      const handleNextSingle = () => {
+        setCurrentQuestion(createRandomQuestion(settings));
+        setSingleRevealed(false);
+      };
+
+      const handleToggleSingleReveal = () => {
+        if (!singleRevealed) playSound('reveal');
+        setSingleRevealed(!singleRevealed);
+      };
+
+      const handleNextGrid = () => {
+        const newQuestions = Array.from({ length: 4 }, () => createRandomQuestion(settings));
+        setGridQuestions(newQuestions);
+        setGridRevealed([false, false, false, false]);
+      };
+
+      const handleToggleGridReveal = (index) => {
+        setGridRevealed(prev => {
+          const next = [...prev];
+          if (!next[index]) playSound('reveal');
+          next[index] = !next[index];
+          return next;
+        });
+      };
+
+      const handleRevealAllGrid = () => {
+        playSound('reveal');
+        setGridRevealed([true, true, true, true]);
+      };
+
+      const handleTimerToggle = () => { setTimerActive(!timerActive); };
+      const handleTimerReset = (secs = timerMax) => { setTimerActive(false); setTimerSeconds(secs); };
+
+      const handleInteractiveBitClick = (index) => {
+        setInteractiveBits(prev => {
+          const next = [...prev];
+          next[index] = next[index] === 0 ? 1 : 0;
+          return next;
+        });
+      };
+
+      const getInteractiveDecimalSum = () => {
+        const pvs = [128, 64, 32, 16, 8, 4, 2, 1];
+        return interactiveBits.reduce((sum, bit, index) => sum + (bit * pvs[index]), 0);
+      };
+
+      const getInteractiveHex = () => {
+        const dec = getInteractiveDecimalSum();
+        return dec.toString(16).toUpperCase().padStart(2, '0');
+      };
+
+      const timerOptions = [
+        { label: '30s', value: 30 }, { label: '1m', value: 60 }, { label: '2m', value: 120 },
+        { label: '3m', value: 180 }, { label: '5m', value: 300 }
+      ];
+
+      return (
+        <div className={`min-h-screen pb-12 transition-colors duration-200 ${projectorMode ? 'bg-slate-950 text-slate-55' : 'bg-slate-50 text-slate-900'}`}>
+          <header className={`border-b px-6 py-4 flex flex-wrap justify-between items-center gap-4 transition-colors ${projectorMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-600 text-white p-2.5 rounded-lg shadow-md flex items-center justify-center">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold tracking-tight">CS Classroom "Do Now" Platform</h1>
+                <p className="text-xs opacity-75">Number Base Conversion Drills &amp; Board Explanations</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className={`inline-flex rounded-lg p-1 ${projectorMode ? 'bg-slate-850' : 'bg-slate-100'}`}>
+                <button onClick={() => setViewMode('single')} className={`px-4 py-1.5 text-sm font-semibold rounded-md flex items-center gap-2 transition-all ${viewMode === 'single' ? 'bg-indigo-600 text-white shadow' : 'hover:opacity-100 opacity-60'}`}>
+                  Flashcard Mode
+                </button>
+                <button onClick={() => setViewMode('grid')} className={`px-4 py-1.5 text-sm font-semibold rounded-md flex items-center gap-2 transition-all ${viewMode === 'grid' ? 'bg-indigo-600 text-white shadow' : 'hover:opacity-100 opacity-60'}`}>
+                  Grid Starter
+                </button>
+              </div>
+              <button onClick={() => setProjectorMode(!projectorMode)} className={`p-2 rounded-lg border transition-all ${projectorMode ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-750' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                {projectorMode ? "☀️ Light Board" : "🌙 Projector Mode"}
+              </button>
+              <button onClick={() => setSoundEnabled(!soundEnabled)} className={`p-2 rounded-lg border transition-all ${soundEnabled ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                {soundEnabled ? "🔊 Sound On" : "🔇 Sound Off"}
+              </button>
+            </div>
+          </header>
+
+          <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div className="lg:col-span-1 space-y-6">
+              <div className={`p-5 rounded-2xl border ${projectorMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                <h3 className="text-sm font-bold uppercase tracking-widest opacity-80 mb-3">Classroom Timer</h3>
+                <div className="flex flex-col items-center justify-center py-2">
+                  <div className={`text-5xl font-black font-mono tracking-tight mb-4 ${timerSeconds < 10 ? 'text-rose-500 animate-pulse' : 'text-indigo-400'}`}>
+                    {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+                  </div>
+                  <div className="flex gap-2 w-full">
+                    <button onClick={handleTimerToggle} className={`flex-1 py-2 rounded-lg font-bold text-sm text-white ${timerActive ? 'bg-rose-600' : 'bg-indigo-600'}`}>{timerActive ? 'Pause' : 'Start'}</button>
+                    <button onClick={() => handleTimerReset(timerMax)} className={`px-3 py-2 rounded-lg text-sm font-medium ${projectorMode ? 'bg-slate-800 text-white' : 'bg-slate-200'}`}>Reset</button>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1 w-full mt-3">
+                    {timerOptions.map(opt => (
+                      <button key={opt.value} onClick={() => { setTimerMax(opt.value); handleTimerReset(opt.value); }} className={`text-[10px] py-1 rounded text-center ${projectorMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100'}`}>{opt.label}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className={`p-5 rounded-2xl border ${projectorMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                <h3 className="text-sm font-bold uppercase tracking-widest mb-4">Topic Configurations</h3>
+                <div className="space-y-3 mb-6">
+                  <label className="text-xs font-semibold uppercase opacity-60">Max Ceiling</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[15, 127, 255].map(v => (
+                      <button key={v} onClick={() => setSettings(s => ({ ...s, maxVal: v }))} className={`p-1.5 text-xs rounded-xl border font-bold ${settings.maxVal === v ? 'border-indigo-600 bg-indigo-600/20 text-indigo-400' : projectorMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                        {v === 15 ? '4-Bit' : v === 127 ? '7-Bit' : '8-Bit'} ({v})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <label className="text-xs font-semibold uppercase opacity-60 block">Conversions Allowed</label>
+                  <button onClick={() => setSettings(s => ({ ...s, binDec: !s.binDec }))} className={`w-full flex justify-between p-2 rounded border ${settings.binDec ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'opacity-40'}`}>Binary ↔ Decimal <span className="h-2 w-2 rounded-full bg-current"></span></button>
+                  <button onClick={() => setSettings(s => ({ ...s, binHex: !s.binHex }))} className={`w-full flex justify-between p-2 rounded border ${settings.binHex ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'opacity-40'}`}>Binary ↔ Hex <span className="h-2 w-2 rounded-full bg-current"></span></button>
+                  <button onClick={() => setSettings(s => ({ ...s, decHex: !s.decHex }))} className={`w-full flex justify-between p-2 rounded border ${settings.decHex ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'opacity-40'}`}>Decimal ↔ Hex <span className="h-2 w-2 rounded-full bg-current"></span></button>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-3 space-y-6">
+              {viewMode === 'single' ? (
+                <div className="flex flex-col gap-6">
+                  <div className={`rounded-3xl border p-8 flex flex-col justify-between items-center text-center relative overflow-hidden ${projectorMode ? 'bg-slate-900 border-slate-800 shadow-xl' : 'bg-white border-slate-200 shadow-lg'}`} style={{ minHeight: '380px' }}>
+                    <div className="absolute top-4 left-4 opacity-20 text-xs font-mono select-none uppercase tracking-widest text-indigo-400">{currentQuestion?.fromBase} → {currentQuestion?.toBase}</div>
+                    <div className="my-auto py-6 w-full">
+                      <div className="text-sm font-semibold uppercase opacity-60 tracking-wider mb-2">Convert the value below:</div>
+                      <div className="text-6xl md:text-8xl font-black font-mono tracking-tight text-indigo-500 my-4">{currentQuestion?.val}</div>
+                      <div className="text-base opacity-75 font-medium">from <span className="underline decoration-indigo-500 decoration-2 font-bold capitalize">{currentQuestion?.fromBase}</span> to <span className="underline decoration-pink-500 decoration-2 font-bold capitalize">{currentQuestion?.toBase}</span></div>
+                    </div>
+                    <div className="w-full mt-auto">
+                      <div className={`transition-all duration-300 overflow-hidden ${singleRevealed ? 'max-h-56 opacity-100' : 'max-h-0 opacity-0'}`}>
+                        <div className={`inline-block px-10 py-5 rounded-2xl font-mono text-5xl md:text-6xl font-black mb-4 tracking-wider border ${projectorMode ? 'bg-indigo-950/40 border-indigo-700/50 text-emerald-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                          {currentQuestion?.targetVal}
+                        </div>
+                      </div>
+                      <div className="flex gap-4 justify-center items-center w-full max-w-md mx-auto">
+                        <button onClick={handleToggleSingleReveal} className={`flex-1 py-4 px-6 rounded-2xl font-bold text-lg ${singleRevealed ? projectorMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200' : 'bg-indigo-600 text-white'}`}>{singleRevealed ? 'Hide Answer' : 'Reveal Answer'}</button>
+                        <button onClick={handleNextSingle} className="flex-1 py-4 px-6 rounded-2xl font-bold text-lg bg-emerald-600 hover:bg-emerald-700 text-white">Next Question</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {currentQuestion && singleRevealed && (
+                    <div className={`rounded-3xl border p-8 ${projectorMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                      <h3 className="text-lg font-bold border-b border-indigo-500/20 pb-4 mb-6 text-indigo-400">Classroom Explainer: Walkthrough Working Out</h3>
+                      <div className="space-y-6">
+                        {currentQuestion.explanation.map((step, idx) => (
+                          <div key={idx} className="flex flex-col gap-2 text-sm">
+                            {step.title && <h4 className="font-semibold text-indigo-300 uppercase">Step {idx + 1}: {step.title}</h4>}
+                            {step.desc && <p className="opacity-90 whitespace-pre-line leading-relaxed">{step.desc}</p>}
+                            {step.type === 'table' && (
+                              <div className="overflow-x-auto my-3">
+                                <table className={`w-full max-w-xl font-mono text-center border-collapse rounded-xl overflow-hidden ${projectorMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'}`}>
+                                  <thead>
+                                    <tr className="border-b border-indigo-500/20 bg-indigo-900/10">
+                                      {step.tableHeaders ? step.tableHeaders.map((h, i) => <th key={i} className="py-2 px-3 text-xs md:text-sm font-bold text-indigo-400 border border-slate-800">{h}</th>) : step.headers?.map((h, i) => <th key={i} className="py-2 px-3 text-xs md:text-sm font-bold text-indigo-400 border border-slate-800">{h}</th>)}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr>
+                                      {step.tableValues ? step.tableValues.map((v, i) => <td key={i} className={`py-3 px-3 text-base md:text-lg font-black border border-slate-800 ${v === '1' ? 'text-emerald-400 bg-emerald-500/5' : 'opacity-40'}`}>{v}</td>) : step.values?.map((v, i) => <td key={i} className={`py-3 px-3 text-base md:text-lg font-black border border-slate-800 ${v === '1' ? 'text-emerald-400 bg-emerald-500/5' : 'opacity-40'}`}>{v}</td>)}
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                            {step.type === 'list' && (
+                              <ul className="list-disc list-inside space-y-1 pl-2 font-mono text-xs opacity-90">
+                                {step.items.map((item, i) => <li key={i}>{item}</li>)}
+                              </ul>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex flex-wrap justify-between items-center gap-4">
+                    <div className="text-sm opacity-70 font-semibold uppercase tracking-wider">Traditional Quad-Board Starter Setup</div>
+                    <div className="flex gap-2">
+                      <button onClick={handleRevealAllGrid} className={`px-4 py-2 rounded-xl text-sm font-bold ${projectorMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'}`}>Reveal All</button>
+                      <button onClick={handleNextGrid} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-xl text-sm">New Quad Grid</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {gridQuestions.map((q, idx) => (
+                      <div key={q.id} className={`rounded-2xl border p-6 flex flex-col justify-between relative overflow-hidden min-h-[220px] ${projectorMode ? 'bg-slate-900 border-slate-800 shadow-md' : 'bg-white border-slate-200 shadow'}`}>
+                        <div className="absolute top-3 left-3 text-[10px] font-mono tracking-widest opacity-40 font-bold uppercase">Q{idx + 1} • {q.fromBase.substring(0,3)} to {q.toBase.substring(0,3)}</div>
+                        <div className="my-auto py-4 text-center">
+                          <div className="text-sm opacity-60 mb-1">Convert:</div>
+                          <div className="text-4xl md:text-5xl font-black font-mono tracking-tight text-indigo-500 my-2">{q.val}</div>
+                          <div className="text-xs opacity-70">{q.fromBase} → {q.toBase}</div>
+                        </div>
+                        <div className="mt-auto border-t border-indigo-500/10 pt-4 flex flex-col items-center gap-2">
+                          <div className={`transition-all duration-300 h-12 overflow-hidden flex items-center justify-center ${gridRevealed[idx] ? 'opacity-100' : 'opacity-0'}`}>
+                            <div className={`font-mono text-2xl font-black px-4 py-1.5 rounded-lg border ${projectorMode ? 'bg-slate-950 border-emerald-500/20 text-emerald-400' : 'bg-slate-100 text-indigo-700'}`}>
+                              {q.targetVal}
+                            </div>
+                          </div>
+                          <button onClick={() => handleToggleGridReveal(idx)} className={`w-full py-2.5 rounded-xl font-bold text-xs ${gridRevealed[idx] ? 'bg-slate-850 hover:bg-slate-800' : 'bg-indigo-600 text-white'}`}>
+                            {gridRevealed[idx] ? 'Hide Answer' : 'Reveal Answer'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="fixed right-6 bottom-6 flex flex-col gap-3 z-30">
+            <button onClick={() => setShowHelperTab(!showHelperTab)} className="shadow-2xl bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-full p-4 flex items-center justify-center transition-all transform hover:scale-105" title="Conversion Reference Sheet">📄 Reference Sheet</button>
+            <button onClick={() => setShowScratchpad(!showScratchpad)} className="shadow-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-full p-4 flex items-center justify-center transition-all transform hover:scale-105" title="Interactive Visual Modeler">🧮 Interactive Scratchpad</button>
+          </div>
+
+          {showHelperTab && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className={`w-full max-w-4xl rounded-3xl p-6 relative shadow-2xl border ${projectorMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
+                <button onClick={() => setShowHelperTab(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-800 transition-colors">✕</button>
+                <h3 className="text-xl font-bold border-b border-indigo-500/20 pb-3 mb-6 text-indigo-400">Classroom Scaffold: Conversion Reference Cheat-Sheet</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto max-h-[70vh]">
+                  <div className={`p-4 rounded-2xl border ${projectorMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-indigo-400 mb-3">Powers of 2 (8-bit Place Values)</h4>
+                    <div className="grid grid-cols-8 gap-1 font-mono text-center">
+                      {[128, 64, 32, 16, 8, 4, 2, 1].map((pv, i) => (
+                        <div key={pv} className={`p-1.5 rounded border text-xs ${projectorMode ? 'bg-slate-900 border-slate-800' : 'bg-white'}`}>
+                          <div className="font-bold text-indigo-400">{pv}</div>
+                          <div className="text-[9px] opacity-65">2<sup>{7 - i}</sup></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${projectorMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-indigo-400 mb-3">Hexadecimal Equivalents</h4>
+                    <div className="grid grid-cols-6 gap-1.5 text-[10px] font-mono text-center">
+                      {[{ dec: 10, hex: 'A', bin: '1010' }, { dec: 11, hex: 'B', bin: '1011' }, { dec: 12, hex: 'C', bin: '1100' }, { dec: 13, hex: 'D', bin: '1101' }, { dec: 14, hex: 'E', bin: '1110' }, { dec: 15, hex: 'F', bin: '1111' }].map(row => (
+                        <div key={row.hex} className={`p-1 rounded border ${projectorMode ? 'bg-slate-900 border-slate-800' : 'bg-white'}`}>
+                          <div className="font-bold text-indigo-400">Dec {row.dec}</div>
+                          <div className="text-sm font-black text-rose-400">Hex {row.hex}</div>
+                          <div className="text-[8px] opacity-60">Bin {row.bin}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showScratchpad && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className={`w-full max-w-4xl rounded-3xl p-6 relative shadow-2xl border ${projectorMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
+                <button onClick={() => setShowScratchpad(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-800 transition-colors">✕</button>
+                <h3 className="text-xl font-bold border-b border-indigo-500/20 pb-3 mb-6 text-indigo-400">Teacher Live Modeling Scratchpad</h3>
+                <p className="text-xs mb-6 opacity-75">Click individual bits to turn them on or off. Use this interactive grid to model conversions, demonstrate place value significance, and explain calculations live.</p>
+                <div className="grid grid-cols-8 gap-2 mb-8">
+                  {[128, 64, 32, 16, 8, 4, 2, 1].map((pv, i) => (
+                    <button key={pv} onClick={() => handleInteractiveBitClick(i)} className={`p-3 rounded-2xl border text-center transition-all transform active:scale-95 flex flex-col justify-between items-center ${interactiveBits[i] === 1 ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold scale-102' : projectorMode ? 'border-slate-800 bg-slate-950 text-slate-500' : 'border-slate-200 bg-slate-50 text-slate-400'}`} style={{ minHeight: '110px' }}>
+                      <span className="text-xs font-bold">{pv}</span>
+                      <span className="text-3xl font-black font-mono my-2">{interactiveBits[i]}</span>
+                      <span className="text-[10px] opacity-50">Bit {7 - i}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className={`p-4 rounded-2xl border text-center ${projectorMode ? 'bg-slate-950 border-slate-850' : 'bg-slate-100'}`}>
+                    <div className="text-xs font-bold uppercase opacity-60 mb-1">Equivalent Decimal</div>
+                    <div className="text-3xl font-black text-indigo-400 font-mono">{getInteractiveDecimalSum()}</div>
+                  </div>
+                  <div className={`p-4 rounded-2xl border text-center ${projectorMode ? 'bg-slate-950 border-slate-850' : 'bg-slate-100'}`}>
+                    <div className="text-xs font-bold uppercase opacity-60 mb-1">Equivalent Binary</div>
+                    <div className="text-3xl font-black text-indigo-400 font-mono">{formatBinary(interactiveBits.join(''), 255)}</div>
+                  </div>
+                  <div className={`p-4 rounded-2xl border text-center ${projectorMode ? 'bg-slate-950 border-slate-850' : 'bg-slate-100'}`}>
+                    <div className="text-xs font-bold uppercase opacity-60 mb-1">Equivalent Hexadecimal</div>
+                    <div className="text-3xl font-black text-indigo-400 font-mono">{getInteractiveHex()}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Mount the React Application
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
