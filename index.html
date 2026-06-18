@@ -24,9 +24,17 @@
 <body>
   <div id="root"></div>
 
-  <!-- We use type="text/babel" for dynamic compilation with classic runtime preset -->
-  <script type="text/babel">
-    /** @jsxRuntime classic */
+  <!-- Register custom Babel Preset to force classic JSX runtime globally -->
+  <script>
+    Babel.registerPreset('classic-react', {
+      presets: [
+        [Babel.availablePresets['react'], { runtime: 'classic' }]
+      ]
+    });
+  </script>
+
+  <!-- We use type="text/babel" compiled with our custom classic-react preset -->
+  <script type="text/babel" data-presets="classic-react">
     const { useState, useEffect, useRef } = React;
 
     // ==========================================
