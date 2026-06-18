@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CS Classroom "Do Now" Platform</title>
   
-  <!-- Tailwind CSS (for modern UI styling) -->
-  <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- React & ReactDOM (Core libraries) -->
-  <script src="[https://unpkg.com/react@18/umd/react.production.min.js](https://unpkg.com/react@18/umd/react.production.min.js)" crossorigin></script>
-  <script src="[https://unpkg.com/react-dom@18/umd/react-dom.production.min.js](https://unpkg.com/react-dom@18/umd/react-dom.production.min.js)" crossorigin></script>
+  <!-- React & ReactDOM CDNs -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   
-  <!-- Babel (to compile your JSX code directly in the browser) -->
-  <script src="[https://unpkg.com/@babel/standalone/babel.min.js](https://unpkg.com/@babel/standalone/babel.min.js)"></script>
+  <!-- Babel Standalone compiler -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
-    /* Prevent raw unrendered code flashes on slow connections */
+    /* Prevent raw content flashes before React mounts */
     [v-cloak] { display: none; }
     body { margin: 0; padding: 0; }
   </style>
@@ -24,8 +24,9 @@
 <body>
   <div id="root"></div>
 
-  <!-- Note: We use type="text/babel" so the browser compiles our React syntax -->
+  <!-- We use type="text/babel" for dynamic compilation with classic runtime preset -->
   <script type="text/babel">
+    /** @jsxRuntime classic */
     const { useState, useEffect, useRef } = React;
 
     // ==========================================
@@ -251,6 +252,9 @@
       };
     }
 
+    // Default global configuration object used for instant first-render states
+    const defaultSettings = { maxVal: 255, binDec: true, binHex: true, decHex: true };
+
     // ==========================================
     // APP MAIN COMPONENT
     // ==========================================
@@ -259,17 +263,25 @@
       const [projectorMode, setProjectorMode] = useState(true);
       const [showHelperTab, setShowHelperTab] = useState(false);
       const [showScratchpad, setShowScratchpad] = useState(false);
-      const [settings, setSettings] = useState({ maxVal: 255, binDec: true, binHex: true, decHex: true });
+      
+      const [settings, setSettings] = useState(defaultSettings);
       const [soundEnabled, setSoundEnabled] = useState(true);
-      const [currentQuestion, setCurrentQuestion] = useState(null);
+
+      // Pre-populate state immediately to avoid any initial null-rendering crashes
+      const [currentQuestion, setCurrentQuestion] = useState(() => createRandomQuestion(defaultSettings));
       const [singleRevealed, setSingleRevealed] = useState(false);
-      const [gridQuestions, setGridQuestions] = useState([]);
+
+      const [gridQuestions, setGridQuestions] = useState(() => 
+        Array.from({ length: 4 }, () => createRandomQuestion(defaultSettings))
+      );
       const [gridRevealed, setGridRevealed] = useState([false, false, false, false]);
+
       const [timerSeconds, setTimerSeconds] = useState(120);
       const [timerActive, setTimerActive] = useState(false);
       const [timerMax, setTimerMax] = useState(120);
       const [interactiveBits, setInteractiveBits] = useState([0,0,0,0,0,0,0,0]);
 
+      // Regenerates tasks whenever user alters limits or configuration options
       useEffect(() => {
         handleNextSingle();
         handleNextGrid();
@@ -310,6 +322,7 @@
         } catch (e) { console.warn(e); }
       };
 
+      // Keyboard listener setup
       useEffect(() => {
         const handleKeyDown = (e) => {
           if (viewMode === 'single') {
@@ -394,7 +407,7 @@
       ];
 
       return (
-        <div className={`min-h-screen pb-12 transition-colors duration-200 ${projectorMode ? 'bg-slate-950 text-slate-55' : 'bg-slate-50 text-slate-900'}`}>
+        <div className={`min-h-screen pb-12 transition-colors duration-200 ${projectorMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-55 text-slate-900'}`}>
           <header className={`border-b px-6 py-4 flex flex-wrap justify-between items-center gap-4 transition-colors ${projectorMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
             <div className="flex items-center gap-3">
               <div className="bg-indigo-600 text-white p-2.5 rounded-lg shadow-md flex items-center justify-center">
@@ -414,10 +427,10 @@
                   Grid Starter
                 </button>
               </div>
-              <button onClick={() => setProjectorMode(!projectorMode)} className={`p-2 rounded-lg border transition-all ${projectorMode ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-750' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+              <button onClick={() => setProjectorMode(!projectorMode)} className={`p-2 rounded-lg border text-xs font-bold transition-all ${projectorMode ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-750' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
                 {projectorMode ? "☀️ Light Board" : "🌙 Projector Mode"}
               </button>
-              <button onClick={() => setSoundEnabled(!soundEnabled)} className={`p-2 rounded-lg border transition-all ${soundEnabled ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+              <button onClick={() => setSoundEnabled(!soundEnabled)} className={`p-2 rounded-lg border text-xs font-bold transition-all ${soundEnabled ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
                 {soundEnabled ? "🔊 Sound On" : "🔇 Sound Off"}
               </button>
             </div>
@@ -433,7 +446,7 @@
                   </div>
                   <div className="flex gap-2 w-full">
                     <button onClick={handleTimerToggle} className={`flex-1 py-2 rounded-lg font-bold text-sm text-white ${timerActive ? 'bg-rose-600' : 'bg-indigo-600'}`}>{timerActive ? 'Pause' : 'Start'}</button>
-                    <button onClick={() => handleTimerReset(timerMax)} className={`px-3 py-2 rounded-lg text-sm font-medium ${projectorMode ? 'bg-slate-800 text-white' : 'bg-slate-200'}`}>Reset</button>
+                    <button onClick={() => handleTimerReset(timerMax)} className={`px-3 py-2 rounded-lg text-sm font-medium ${projectorMode ? 'bg-slate-800 text-white' : 'bg-slate-250'}`}>Reset</button>
                   </div>
                   <div className="grid grid-cols-5 gap-1 w-full mt-3">
                     {timerOptions.map(opt => (
@@ -501,12 +514,12 @@
                                 <table className={`w-full max-w-xl font-mono text-center border-collapse rounded-xl overflow-hidden ${projectorMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'}`}>
                                   <thead>
                                     <tr className="border-b border-indigo-500/20 bg-indigo-900/10">
-                                      {step.tableHeaders ? step.tableHeaders.map((h, i) => <th key={i} className="py-2 px-3 text-xs md:text-sm font-bold text-indigo-400 border border-slate-800">{h}</th>) : step.headers?.map((h, i) => <th key={i} className="py-2 px-3 text-xs md:text-sm font-bold text-indigo-400 border border-slate-800">{h}</th>)}
+                                      {step.headers?.map((h, i) => <th key={i} className="py-2 px-3 text-xs md:text-sm font-bold text-indigo-400 border border-slate-800">{h}</th>)}
                                     </tr>
                                   </thead>
                                   <tbody>
                                     <tr>
-                                      {step.tableValues ? step.tableValues.map((v, i) => <td key={i} className={`py-3 px-3 text-base md:text-lg font-black border border-slate-800 ${v === '1' ? 'text-emerald-400 bg-emerald-500/5' : 'opacity-40'}`}>{v}</td>) : step.values?.map((v, i) => <td key={i} className={`py-3 px-3 text-base md:text-lg font-black border border-slate-800 ${v === '1' ? 'text-emerald-400 bg-emerald-500/5' : 'opacity-40'}`}>{v}</td>)}
+                                      {step.values?.map((v, i) => <td key={i} className={`py-3 px-3 text-base md:text-lg font-black border border-slate-800 ${v === '1' ? 'text-emerald-400 bg-emerald-500/5' : 'opacity-40'}`}>{v}</td>)}
                                     </tr>
                                   </tbody>
                                 </table>
@@ -634,7 +647,7 @@
       );
     }
 
-    // Mount the React Application
+    // Mount application cleanly
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
